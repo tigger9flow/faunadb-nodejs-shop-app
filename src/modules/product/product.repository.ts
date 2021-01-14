@@ -4,6 +4,7 @@ import { mergeWithRef } from '../../common'
 import { Product, SortOpt } from './product.type'
 
 export interface ListProductsInput {
+  size?: number
   sortBy?: SortOpt
   categoryRef?: string
 }
@@ -31,6 +32,7 @@ export const createProduct = ({
 export const listProducts = ({
   categoryRef,
   sortBy = SortOpt.AVAILABLE,
+  size = 12,
 }: ListProductsInput = {}) => {
   const sortIndex = {
     [SortOpt.AVAILABLE]: Db.PRODUCTS_SORT_BY_IN_STOCK_AND_CREATED_AT,
@@ -44,7 +46,7 @@ export const listProducts = ({
       )
     : Q.Documents(Q.Collection(Db.PRODUCTS))
   const Query = Q.Map(
-    Q.Paginate(Q.Join(ProductsMatch, Q.Index(sortIndex))),
+    Q.Paginate(Q.Join(ProductsMatch, Q.Index(sortIndex)), { size }),
     Q.Lambda(['_', '__', 'ref'], Q.Get(Q.Var('ref'))),
   )
 

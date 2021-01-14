@@ -12,3 +12,4 @@ export const PRODUCTS_SORT_BY_IN_STOCK_AND_CREATED_AT =
 export const PRODUCTS_SORT_BY_PRICE_ASC = 'products_sort_by_price_asc'
 export const PRODUCTS_SORT_BY_PRICE_DESC =
   'products_sort_by_price_desc'
+export const ORDERS_SEARCH_BY_USER = 'orders_search_by_user'

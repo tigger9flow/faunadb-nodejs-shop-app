@@ -1,86 +1,89 @@
 import { RouteOptions } from 'fastify'
+import { numericString } from '../../common'
 import { Product, SortOpt } from './product.type'
 import * as productRepo from './product.repository'
 
-const numericString = {
-  type: 'string',
-  pattern: '^[0-9]+$',
-  minLength: 1,
+interface ListQuery {
+  size?: number
+  sortBy?: SortOpt
+}
+
+const productPayloadSchema = {
+  type: 'object',
+  properties: {
+    name: {
+      type: 'string',
+      minLength: 1,
+    },
+    price: {
+      type: 'number',
+      minimum: 1,
+    },
+    quantity: {
+      type: 'integer',
+      minimum: 0,
+    },
+    inCategoryRefs: {
+      type: 'array',
+      items: numericString,
+    },
+  },
+  required: ['name', 'price', 'quantity', 'inCategoryRefs'],
 }
 
 const createProduct: RouteOptions = {
   method: 'POST',
   url: '/products',
   schema: {
-    body: {
-      type: 'object',
-      properties: {
-        name: {
-          type: 'string',
-          minLength: 1,
-        },
-        price: {
-          type: 'number',
-          minimum: 1,
-        },
-        quantity: {
-          type: 'integer',
-          minimum: 0,
-        },
-        inCategoryRefs: {
-          type: 'array',
-          items: numericString,
-        },
-      },
-      required: ['name', 'price', 'quantity', 'inCategoryRefs'],
-    },
+    body: productPayloadSchema,
   },
-  handler: req =>
+  handler: ({ body }) =>
     productRepo.createProduct(
-      req.body as Omit<Product, 'createdAt'> &
+      body as Omit<Product, 'createdAt'> &
         Record<'inCategoryRefs', string[]>,
     ),
 }
 
-const sortQuery = {
+const listQuery = {
   sortBy: {
     enum: Object.values(SortOpt),
   },
+  size: {
+    type: 'integer',
+    minimum: 1,
+    maximum: 50,
+  },
 }
 
-const listRecentProducts: RouteOptions = {
+const listProducts: RouteOptions = {
   method: 'GET',
   url: '/products',
   schema: {
-    querystring: sortQuery,
+    querystring: listQuery,
   },
-  handler: req =>
-    productRepo.listProducts({
-      sortBy: (req.query as Partial<Record<'sortBy', SortOpt>>)
-        .sortBy,
-    }),
+  handler: ({ query }) =>
+    productRepo.listProducts(query as ListQuery),
 }
 
 const listProductsByCategory: RouteOptions = {
   method: 'GET',
   url: '/categories/:categoryRef/products',
   schema: {
-    querystring: sortQuery,
+    querystring: listQuery,
     params: {
       categoryRef: numericString,
     },
   },
-  handler: req =>
+  handler: ({ query, params }) =>
     productRepo.listProducts({
-      sortBy: (req.query as Partial<Record<'sortBy', SortOpt>>)
-        .sortBy,
-      categoryRef: (req.params as Record<'categoryRef', string>)
+      ...(query as ListQuery),
+      categoryRef: (params as Record<'categoryRef', string>)
         .categoryRef,
     }),
 }
 
 export const routes = [
   createProduct,
-  listRecentProducts,
+  listProducts,
   listProductsByCategory,
 ]

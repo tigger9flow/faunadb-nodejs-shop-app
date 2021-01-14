@@ -16,10 +16,8 @@ const createCategory: RouteOptions = {
       required: ['name'],
     },
   },
-  handler: req =>
-    categoryRepo.createCategory(
-      req.body as Omit<Category, 'createdAt'>,
-    ),
+  handler: ({ body }) =>
+    categoryRepo.createCategory(body as Omit<Category, 'createdAt'>),
 }
 
 const listCategories: RouteOptions = {

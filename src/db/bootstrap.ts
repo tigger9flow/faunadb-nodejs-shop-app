@@ -99,6 +99,21 @@ const indexes: [string, Expr][] = [
       ],
     }),
   ],
+  // Orders
+  [
+    Db.ORDERS_SEARCH_BY_USER,
+    Q.CreateIndex({
+      name: Db.ORDERS_SEARCH_BY_USER,
+      source: Q.Collection(Db.ORDERS),
+      terms: [{ field: ['data', 'userRef'] }],
+      values: [
+        {
+          field: ['data', 'orderedAt'],
+        },
+        { field: ['ref'] },
+      ],
+    }),
+  ],
 ]
 
 const bootstrap = async () => {
