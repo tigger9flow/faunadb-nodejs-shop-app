@@ -16,10 +16,6 @@ export interface OrderedItemInput extends Omit<OrderedItem, 'price'> {
   productRef: string
 }
 
-export interface CreateOrderInput {
-  items: OrderedItemInput[]
-}
-
 export interface Order {
   status: OrderStatus
   userRef: RefOrString

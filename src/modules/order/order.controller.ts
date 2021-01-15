@@ -1,6 +1,6 @@
 import { RouteOptions } from 'fastify'
 import { numericString } from '../../common'
-import { CreateOrderInput } from './order.type'
+import { OrderedItemInput, OrderStatus } from './order.type'
 import * as orderRepo from './order.repository'
 
 const createOrder: RouteOptions = {
@@ -29,7 +29,34 @@ const createOrder: RouteOptions = {
     },
   },
   handler: async ({ body }) =>
-    orderRepo.createOrder(body as CreateOrderInput),
+    orderRepo.createOrder(
+      body as Record<'items', OrderedItemInput[]>,
+    ),
+}
+
+const updateOrder: RouteOptions = {
+  method: 'PUT',
+  url: '/orders/:orderRef',
+  schema: {
+    params: {
+      orderRef: numericString,
+    },
+    body: {
+      type: 'object',
+      properties: {
+        status: {
+          type: 'string',
+          enum: Object.values(OrderStatus),
+        },
+      },
+      required: ['status'],
+    },
+  },
+  handler: ({ params, body }) =>
+    orderRepo.updateOrder({
+      orderRef: (params as Record<'orderRef', string>).orderRef,
+      payload: body as Record<'status', OrderStatus>,
+    }),
 }
 
 const listUserOrders: RouteOptions = {
@@ -44,4 +71,4 @@ const listUserOrders: RouteOptions = {
     orderRepo.listUserOrders(params as Record<'userRef', string>),
 }
 
-export const routes = [createOrder, listUserOrders]
+export const routes = [createOrder, updateOrder, listUserOrders]

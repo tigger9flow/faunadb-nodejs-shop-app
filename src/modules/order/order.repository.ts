@@ -1,11 +1,18 @@
 import { query as Q, values as V } from 'faunadb'
 import { mergeWithRef } from '../../common'
 import * as Db from '../../db'
-import { CreateOrderInput, Order, OrderStatus } from './order.type'
+import { Order, OrderedItemInput, OrderStatus } from './order.type'
 
 const FAKED_USER_REF = '287683595233919495'
 
-export const createOrder = ({ items }: CreateOrderInput) => {
+export interface UpdateOrderInput {
+  orderRef: string
+  payload: Pick<Order, 'status'>
+}
+
+export const createOrder = ({
+  items,
+}: Record<'items', OrderedItemInput[]>) => {
   const productRefAndQuantities = items.map(
     ({ productRef, quantity }) => ({
       productRef: Q.Ref(Q.Collection(Db.PRODUCTS), productRef),
@@ -108,6 +115,22 @@ export const createOrder = ({ items }: CreateOrderInput) => {
       // TODO: handle transaction aborted error
       .then(mergeWithRef())
   )
+}
+
+export const updateOrder = ({
+  orderRef,
+  payload: { status },
+}: UpdateOrderInput) => {
+  const UpdateOrderQuery = Q.Update(
+    Q.Ref(Q.Collection(Db.ORDERS), orderRef),
+    {
+      data: { status },
+    },
+  )
+
+  return Db.client
+    .query<V.Document<Order>>(UpdateOrderQuery)
+    .then(mergeWithRef())
 }
 
 export const listUserOrders = ({
