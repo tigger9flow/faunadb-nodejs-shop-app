@@ -2,18 +2,27 @@ import dotenv from 'dotenv'
 
 dotenv.config()
 
-import { query as Q, Expr } from 'faunadb'
+import { Expr, query as Q } from 'faunadb'
 import * as Db from '.'
+import { UserType } from '../modules/user/user.type'
+import * as usersRepo from '../modules/user/user.repository'
 
-const MakeCollection = (name: string) =>
-  Q.If(
-    Q.Exists(Q.Collection(name)),
-    true,
-    Q.CreateCollection({ name }),
+const {
+  FAUNA_SECRET_ADMIN_KEY,
+  ADMIN_PHONE,
+  ADMIN_PASSWORD,
+} = process.env
+
+if (
+  ![FAUNA_SECRET_ADMIN_KEY, ADMIN_PHONE, ADMIN_PASSWORD].every(
+    Boolean,
   )
+) {
+  throw new Error('Missing env variables')
+}
 
-const MakeIndex = (name: string, IndexDef: Expr) =>
-  Q.If(Q.Exists(Q.Index(name)), true, IndexDef)
+const CreateIfNotExists = (Resource: Expr, CreateDef: Expr) =>
+  Q.If(Q.Exists(Resource), true, CreateDef)
 
 const collections = [Db.USERS, Db.PRODUCTS, Db.CATEGORIES, Db.ORDERS]
 
@@ -27,10 +36,20 @@ const createdAtDescAndRef = [
   },
 ]
 
-const indexes: [string, Expr][] = [
+const indexes: [Expr, Expr][] = [
+  // Users
+  [
+    Q.Index(Db.USERS_SEARCH_BY_PHONE),
+    Q.CreateIndex({
+      name: Db.USERS_SEARCH_BY_PHONE,
+      source: Q.Collection(Db.USERS),
+      terms: [{ field: ['data', 'phone'] }],
+      unique: true,
+    }),
+  ],
   // Products
   [
-    Db.PRODUCTS_SEARCH_BY_CATEGORY,
+    Q.Index(Db.PRODUCTS_SEARCH_BY_CATEGORY),
     Q.CreateIndex({
       name: Db.PRODUCTS_SEARCH_BY_CATEGORY,
       source: Q.Collection(Db.PRODUCTS),
@@ -42,7 +61,7 @@ const indexes: [string, Expr][] = [
     }),
   ],
   [
-    Db.PRODUCTS_SORT_BY_PRICE_ASC,
+    Q.Index(Db.PRODUCTS_SORT_BY_PRICE_ASC),
     Q.CreateIndex({
       name: Db.PRODUCTS_SORT_BY_PRICE_ASC,
       source: Q.Collection(Db.PRODUCTS),
@@ -56,7 +75,7 @@ const indexes: [string, Expr][] = [
     }),
   ],
   [
-    Db.PRODUCTS_SORT_BY_PRICE_DESC,
+    Q.Index(Db.PRODUCTS_SORT_BY_PRICE_DESC),
     Q.CreateIndex({
       name: Db.PRODUCTS_SORT_BY_PRICE_DESC,
       source: Q.Collection(Db.PRODUCTS),
@@ -71,7 +90,7 @@ const indexes: [string, Expr][] = [
     }),
   ],
   [
-    Db.PRODUCTS_SORT_BY_IN_STOCK_AND_CREATED_AT,
+    Q.Index(Db.PRODUCTS_SORT_BY_IN_STOCK_AND_CREATED_AT),
     Q.CreateIndex({
       name: Db.PRODUCTS_SORT_BY_IN_STOCK_AND_CREATED_AT,
       source: {
@@ -101,7 +120,7 @@ const indexes: [string, Expr][] = [
   ],
   // Orders
   [
-    Db.ORDERS_SEARCH_BY_USER,
+    Q.Index(Db.ORDERS_SEARCH_BY_USER),
     Q.CreateIndex({
       name: Db.ORDERS_SEARCH_BY_USER,
       source: Q.Collection(Db.ORDERS),
@@ -116,16 +135,131 @@ const indexes: [string, Expr][] = [
   ],
 ]
 
+const OwnedDocument = (ownerRefPath: string[]) =>
+  Q.Query(
+    Q.Lambda(
+      'ref',
+      Q.Let(
+        {
+          doc: Q.Get(Q.Var('ref')),
+        },
+        Q.Equals(
+          Q.CurrentIdentity(),
+          Q.Select(ownerRefPath, Q.Var('doc')),
+        ),
+      ),
+    ),
+  )
+
+const MembershipFor = (userType: UserType) => ({
+  resource: Q.Collection(Db.USERS),
+  predicate: Q.Query(
+    Q.Lambda(
+      'userRef',
+      Q.Let(
+        {
+          userDoc: Q.Get(Q.Var('userRef')),
+          userType: Q.Select(['data', 'type'], Q.Var('userDoc')),
+        },
+        Q.Equals(userType, Q.Var('userType')),
+      ),
+    ),
+  ),
+})
+
+const roles: [Expr, Expr][] = [
+  [
+    Q.Role(Db.CUSTOMER_ROLE),
+    Q.CreateRole({
+      name: Db.CUSTOMER_ROLE,
+      membership: MembershipFor(UserType.CUSTOMER),
+      privileges: [
+        {
+          resource: Q.Collection(Db.ORDERS),
+          actions: {
+            read: OwnedDocument(['data', 'userRef']),
+          },
+        },
+        {
+          resource: Q.Index(Db.ORDERS_SEARCH_BY_USER),
+          actions: {
+            read: Q.Query(
+              Q.Lambda(
+                'terms',
+                Q.Equals(
+                  Q.CurrentIdentity(),
+                  Q.Select([0], Q.Var('terms')),
+                ),
+              ),
+            ),
+          },
+        },
+      ],
+    }),
+  ],
+  [
+    Q.Role(Db.ADMIN_ROLE),
+    Q.CreateRole({
+      name: Db.ADMIN_ROLE,
+      membership: MembershipFor(UserType.ADMIN),
+      privileges: [
+        {
+          resource: Q.Collection(Db.PRODUCTS),
+          actions: {
+            create: true,
+          },
+        },
+        {
+          resource: Q.Collection(Db.CATEGORIES),
+          actions: {
+            create: true,
+          },
+        },
+        {
+          resource: Q.Collection(Db.ORDERS),
+          actions: {
+            write: true,
+          },
+        },
+      ],
+    }),
+  ],
+]
+
 const bootstrap = async () => {
-  for (const name of collections) {
-    await Db.client.query(MakeCollection(name))
+  const client = Db.clientForSecret(FAUNA_SECRET_ADMIN_KEY!)
+
+  const resources: [Expr, Expr][] = [
+    ...collections.map<[Expr, Expr]>(name => [
+      Q.Collection(name),
+      Q.CreateCollection({ name }),
+    ]),
+    ...indexes,
+    ...roles,
+  ]
+
+  for (const pair of resources) {
+    await client.query(CreateIfNotExists(...pair))
   }
 
-  for (const [name, IndexDef] of indexes) {
-    await Db.client.query(MakeIndex(name, IndexDef))
+  // Create admin user
+  const adminExists = await client.query(
+    Q.Exists(
+      Q.Match(Q.Index(Db.USERS_SEARCH_BY_PHONE), ADMIN_PHONE!),
+    ),
+  )
+
+  if (!adminExists) {
+    await usersRepo.registerUser({
+      type: UserType.ADMIN,
+      phone: ADMIN_PHONE!,
+      password: ADMIN_PASSWORD!,
+    })
+
+    console.info(`Admin (${ADMIN_PHONE!}) user has been created`)
   }
 
-  console.info('Ok')
+  console.info('Done')
 }
 
 bootstrap().catch(console.error)

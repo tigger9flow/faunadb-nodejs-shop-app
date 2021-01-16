@@ -1,7 +1,13 @@
 import { RouteOptions } from 'fastify'
-import { numericString } from '../../common'
+import {
+  WithAuthorization,
+  authorizationSchema,
+  schemaSecurity,
+  numericStringSchema,
+} from '../../common'
 import { Product, SortOpt } from './product.type'
 import * as productRepo from './product.repository'
+import HttpErrors from 'http-errors'
 
 interface ListQuery {
   size?: number
@@ -25,7 +31,7 @@ const productPayloadSchema = {
     },
     inCategoryRefs: {
       type: 'array',
-      items: numericString,
+      items: numericStringSchema,
     },
   },
   required: ['name', 'price', 'quantity', 'inCategoryRefs'],
@@ -35,16 +41,26 @@ const createProduct: RouteOptions = {
   method: 'POST',
   url: '/products',
   schema: {
+    headers: authorizationSchema,
+    security: schemaSecurity,
     body: productPayloadSchema,
   },
-  handler: ({ body }) =>
-    productRepo.createProduct(
-      body as Omit<Product, 'createdAt'> &
+  handler: ({ body, headers }) => {
+    const { authorization } = headers as WithAuthorization
+
+    if (!authorization) {
+      return Promise.reject(new HttpErrors.Unauthorized())
+    }
+
+    return productRepo.createProduct({
+      secret: authorization,
+      payload: body as Omit<Product, 'createdAt'> &
         Record<'inCategoryRefs', string[]>,
-    ),
+    })
+  },
 }
 
-const listQuery = {
+const listQuerySchema = {
   sortBy: {
     enum: Object.values(SortOpt),
   },
@@ -59,7 +75,7 @@ const listProducts: RouteOptions = {
   method: 'GET',
   url: '/products',
   schema: {
-    querystring: listQuery,
+    querystring: listQuerySchema,
   },
   handler: ({ query }) =>
     productRepo.listProducts(query as ListQuery),
@@ -69,9 +85,9 @@ const listProductsByCategory: RouteOptions = {
   method: 'GET',
   url: '/categories/:categoryRef/products',
   schema: {
-    querystring: listQuery,
+    querystring: listQuerySchema,
     params: {
-      categoryRef: numericString,
+      categoryRef: numericStringSchema,
     },
   },
   handler: ({ query, params }) =>

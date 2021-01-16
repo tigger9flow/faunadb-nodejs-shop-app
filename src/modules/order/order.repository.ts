@@ -1,18 +1,26 @@
-import { query as Q, values as V } from 'faunadb'
-import { mergeWithRef } from '../../common'
+import HttpErrors from 'http-errors'
+import {
+  query as Q,
+  values as V,
+  errors as FaunaErrors,
+} from 'faunadb'
+import { WithSecret, mergeWithRef } from '../../common'
 import * as Db from '../../db'
 import { Order, OrderedItemInput, OrderStatus } from './order.type'
 
-const FAKED_USER_REF = '287683595233919495'
-
-export interface UpdateOrderInput {
+export interface UpdateOrderInput extends WithSecret {
   orderRef: string
   payload: Pick<Order, 'status'>
 }
 
-export const createOrder = ({
+export const createOrder = async ({
   items,
-}: Record<'items', OrderedItemInput[]>) => {
+  secret,
+}: Record<'items', OrderedItemInput[]> & WithSecret) => {
+  const userRef = await Db.clientForSecret(secret).query(
+    Q.CurrentIdentity(),
+  )
+
   const productRefAndQuantities = items.map(
     ({ productRef, quantity }) => ({
       productRef: Q.Ref(Q.Collection(Db.PRODUCTS), productRef),
@@ -97,7 +105,7 @@ export const createOrder = ({
       ),
       Q.Create(Q.Collection(Db.ORDERS), {
         data: {
-          userRef: FAKED_USER_REF,
+          userRef,
           status: OrderStatus.ORDERED,
           items: Q.Map(
             Q.Var('productAndQuantities'),
@@ -109,15 +117,25 @@ export const createOrder = ({
     ),
   )
 
-  return (
-    Db.client
-      .query<V.Document<Order>>(CreateOrderFlow)
-      // TODO: handle transaction aborted error
-      .then(mergeWithRef())
-  )
+  return Db.client
+    .query<V.Document<Order>>(CreateOrderFlow)
+    .then(mergeWithRef())
+    .catch(err =>
+      Promise.reject(
+        err instanceof FaunaErrors.BadRequest
+          ? new HttpErrors.BadRequest(
+              ((err as unknown) as Record<
+                'description',
+                string
+              >).description,
+            )
+          : err,
+      ),
+    )
 }
 
 export const updateOrder = ({
+  secret,
   orderRef,
   payload: { status },
 }: UpdateOrderInput) => {
@@ -128,22 +146,22 @@ export const updateOrder = ({
     },
   )
 
-  return Db.client
+  return Db.clientForSecret(secret)
     .query<V.Document<Order>>(UpdateOrderQuery)
-    .then(mergeWithRef())
+    .then(mergeWithRef({ refFields: ['userRef'] }))
 }
 
-export const listUserOrders = ({
-  userRef,
-}: Record<'userRef', string>) => {
+export const listUserOrders = ({ secret }: WithSecret) => {
   const ListUserOrders = Q.Map(
-    Q.Paginate(Q.Match(Q.Index(Db.ORDERS_SEARCH_BY_USER), userRef)),
+    Q.Paginate(
+      Q.Match(Q.Index(Db.ORDERS_SEARCH_BY_USER), Q.CurrentIdentity()),
+    ),
     Q.Lambda(['_', 'ref'], Q.Get(Q.Var('ref'))),
   )
 
-  return Db.client
+  return Db.clientForSecret(secret)
     .query<V.Page<V.Document<Order>>>(ListUserOrders)
     .then(({ data }) => ({
-      data: data.map(mergeWithRef()),
+      data: data.map(mergeWithRef({ refFields: ['userRef'] })),
     }))
 }

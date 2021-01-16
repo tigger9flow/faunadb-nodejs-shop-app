@@ -6,11 +6,19 @@ import Fastify from 'fastify'
 import Swagger from 'fastify-swagger'
 import { isProd } from './common'
 import { applyRoutes } from './routes'
+import { applyErrorHandler } from './common/errors'
 
 const PORT = process.env.PORT ?? '3000'
 
 const main = async () => {
-  const app = Fastify({ logger: !isProd() })
+  const app = Fastify({
+    logger: !isProd(),
+    ajv: {
+      customOptions: {
+        removeAdditional: 'all',
+      },
+    },
+  })
 
   app.register(Swagger, {
     routePrefix: '/docs',
@@ -20,10 +28,18 @@ const main = async () => {
         title: 'FaunaDB NodeJS ShopApp',
         version: '1.0.0',
       },
+      securityDefinitions: {
+        apiKey: {
+          type: 'apiKey',
+          name: 'authorization',
+          in: 'header',
+        },
+      },
     },
   })
 
   applyRoutes(app)
+  applyErrorHandler(app)
 
   await app.listen(PORT)
 

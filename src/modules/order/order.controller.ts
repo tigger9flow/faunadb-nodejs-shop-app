@@ -1,5 +1,11 @@
 import { RouteOptions } from 'fastify'
-import { numericString } from '../../common'
+import HttpErrors from 'http-errors'
+import {
+  WithAuthorization,
+  authorizationSchema,
+  numericStringSchema,
+  schemaSecurity,
+} from '../../common'
 import { OrderedItemInput, OrderStatus } from './order.type'
 import * as orderRepo from './order.repository'
 
@@ -7,6 +13,8 @@ const createOrder: RouteOptions = {
   method: 'POST',
   url: '/orders',
   schema: {
+    headers: authorizationSchema,
+    security: schemaSecurity,
     body: {
       type: 'object',
       properties: {
@@ -15,7 +23,7 @@ const createOrder: RouteOptions = {
           items: {
             type: 'object',
             properties: {
-              productRef: numericString,
+              productRef: numericStringSchema,
               quantity: {
                 type: 'integer',
                 minimum: 1,
@@ -28,18 +36,28 @@ const createOrder: RouteOptions = {
       required: ['items'],
     },
   },
-  handler: async ({ body }) =>
-    orderRepo.createOrder(
-      body as Record<'items', OrderedItemInput[]>,
-    ),
+  handler: async ({ body, headers }) => {
+    const { authorization } = headers as WithAuthorization
+
+    if (!authorization) {
+      return Promise.reject(new HttpErrors.Unauthorized())
+    }
+
+    return orderRepo.createOrder({
+      secret: authorization,
+      ...(body as Record<'items', OrderedItemInput[]>),
+    })
+  },
 }
 
 const updateOrder: RouteOptions = {
   method: 'PUT',
   url: '/orders/:orderRef',
   schema: {
+    headers: authorizationSchema,
+    security: schemaSecurity,
     params: {
-      orderRef: numericString,
+      orderRef: numericStringSchema,
     },
     body: {
       type: 'object',
@@ -52,23 +70,39 @@ const updateOrder: RouteOptions = {
       required: ['status'],
     },
   },
-  handler: ({ params, body }) =>
-    orderRepo.updateOrder({
+  handler: ({ headers, params, body }) => {
+    const { authorization } = headers as WithAuthorization
+
+    if (!authorization) {
+      return Promise.reject(new HttpErrors.Unauthorized())
+    }
+
+    return orderRepo.updateOrder({
+      secret: authorization,
       orderRef: (params as Record<'orderRef', string>).orderRef,
       payload: body as Record<'status', OrderStatus>,
-    }),
+    })
+  },
 }
 
 const listUserOrders: RouteOptions = {
   method: 'GET',
-  url: '/users/:userRef/orders',
+  url: '/users/current/orders',
   schema: {
-    params: {
-      userRef: numericString,
-    },
+    headers: authorizationSchema,
+    security: schemaSecurity,
   },
-  handler: ({ params }) =>
-    orderRepo.listUserOrders(params as Record<'userRef', string>),
+  handler: ({ headers }) => {
+    const { authorization } = headers as WithAuthorization
+
+    if (!authorization) {
+      return Promise.reject(new HttpErrors.Unauthorized())
+    }
+
+    return orderRepo.listUserOrders({
+      secret: authorization,
+    })
+  },
 }
 
 export const routes = [createOrder, updateOrder, listUserOrders]

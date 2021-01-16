@@ -1,6 +1,6 @@
 import { query as Q, values as V } from 'faunadb'
 import * as Db from '../../db'
-import { mergeWithRef } from '../../common'
+import { mergeWithRef, WithSecret } from '../../common'
 import { Product, SortOpt } from './product.type'
 
 export interface ListProductsInput {
@@ -9,11 +9,15 @@ export interface ListProductsInput {
   categoryRef?: string
 }
 
+export interface CreateProductInput extends WithSecret {
+  payload: Omit<Product, 'createdAt'> &
+    Record<'inCategoryRefs', string[]>
+}
+
 export const createProduct = ({
-  inCategoryRefs,
-  ...payload
-}: Omit<Product, 'createdAt'> &
-  Record<'inCategoryRefs', string[]>) => {
+  secret,
+  payload: { inCategoryRefs, ...payload },
+}: CreateProductInput) => {
   const CreateProduct = Q.Create(Q.Collection(Db.PRODUCTS), {
     data: {
       ...payload,
@@ -24,7 +28,7 @@ export const createProduct = ({
     },
   })
 
-  return Db.client
+  return Db.clientForSecret(secret)
     .query<V.Document<Product>>(CreateProduct)
     .then(mergeWithRef({ refFields: ['inCategoryRefs'] }))
 }

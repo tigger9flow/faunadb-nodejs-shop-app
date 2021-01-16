@@ -1,11 +1,16 @@
 import { query as Q, values as V } from 'faunadb'
-import { mergeWithRef } from '../../common'
+import { WithSecret, mergeWithRef } from '../../common'
 import * as Db from '../../db'
 import { Category } from './category.type'
 
-export const createCategory = (
-  payload: Omit<Category, 'createdAt'>,
-) => {
+export interface CreateCategoryInput extends WithSecret {
+  payload: Omit<Category, 'createdAt'>
+}
+
+export const createCategory = ({
+  secret,
+  payload,
+}: CreateCategoryInput) => {
   const CreateCategory = Q.Create(Q.Collection(Db.CATEGORIES), {
     data: {
       ...payload,
@@ -13,7 +18,7 @@ export const createCategory = (
     },
   })
 
-  return Db.client
+  return Db.clientForSecret(secret)
     .query<V.Document<Category>>(CreateCategory)
     .then(mergeWithRef())
 }
