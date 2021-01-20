@@ -23,3 +23,8 @@ export interface Order {
   // TODO: fix wrong typing as fauna returns not a plain Date object
   orderedAt: Date
 }
+
+export interface OrderChange {
+  ts: number
+  data: Pick<Order, 'status'>
+}

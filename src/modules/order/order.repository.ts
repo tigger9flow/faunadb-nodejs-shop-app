@@ -6,12 +6,19 @@ import {
 } from 'faunadb'
 import { WithSecret, mergeWithRef } from '../../common'
 import * as Db from '../../db'
-import { Order, OrderedItemInput, OrderStatus } from './order.type'
+import {
+  Order,
+  OrderChange,
+  OrderedItemInput,
+  OrderStatus,
+} from './order.type'
 
 export interface UpdateOrderInput extends WithSecret {
   orderRef: string
   payload: Pick<Order, 'status'>
 }
+
+const mergeOrderWithRef = mergeWithRef({ refFields: ['userRef'] })
 
 export const createOrder = async ({
   items,
@@ -119,7 +126,7 @@ export const createOrder = async ({
 
   return Db.client
     .query<V.Document<Order>>(CreateOrderFlow)
-    .then(mergeWithRef())
+    .then(mergeOrderWithRef)
     .catch(err =>
       Promise.reject(
         err instanceof FaunaErrors.BadRequest
@@ -148,7 +155,7 @@ export const updateOrder = ({
 
   return Db.clientForSecret(secret)
     .query<V.Document<Order>>(UpdateOrderQuery)
-    .then(mergeWithRef({ refFields: ['userRef'] }))
+    .then(mergeOrderWithRef)
 }
 
 export const listUserOrders = ({ secret }: WithSecret) => {
@@ -162,6 +169,36 @@ export const listUserOrders = ({ secret }: WithSecret) => {
   return Db.clientForSecret(secret)
     .query<V.Page<V.Document<Order>>>(ListUserOrders)
     .then(({ data }) => ({
-      data: data.map(mergeWithRef({ refFields: ['userRef'] })),
+      data: data.map(mergeOrderWithRef),
     }))
+}
+
+export const listOrderChanges = ({
+  secret,
+  orderRef,
+}: WithSecret & Record<'orderRef', string>) => {
+  const ListOrderChanges = Q.Filter(
+    Q.Select(
+      ['data'],
+      Q.Paginate(Q.Events(Q.Ref(Q.Collection(Db.ORDERS), orderRef))),
+    ),
+    Q.Lambda('doc', Q.ContainsPath(['data', 'status'], Q.Var('doc'))),
+  )
+
+  const formatChanges = (items: OrderChange[]) =>
+    items.map(({ ts, data }) => ({
+      status: data.status,
+      at: new Date(Math.round(ts / 1000)),
+    }))
+
+  return Db.clientForSecret(secret)
+    .query<OrderChange[]>(ListOrderChanges)
+    .then(formatChanges)
+    .catch(err =>
+      Promise.reject(
+        err instanceof FaunaErrors.PermissionDenied
+          ? new HttpErrors.NotFound()
+          : err,
+      ),
+    )
 }

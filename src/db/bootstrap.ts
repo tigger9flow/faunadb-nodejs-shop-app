@@ -178,6 +178,7 @@ const roles: [Expr, Expr][] = [
           resource: Q.Collection(Db.ORDERS),
           actions: {
             read: OwnedDocument(['data', 'userRef']),
+            history_read: OwnedDocument(['data', 'userRef']),
           },
         },
         {
