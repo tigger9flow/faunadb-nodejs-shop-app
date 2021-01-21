@@ -82,20 +82,17 @@ export const createOrder = async ({
 
   const RemapProductAndQuantityToOrderedItem = Q.Lambda(
     'productAndQuantity',
-    Q.Let(
-      {},
-      {
-        productRef: Q.Select(
-          ['product', 'ref'],
-          Q.Var('productAndQuantity'),
-        ),
-        quantity: Q.Select(['quantity'], Q.Var('productAndQuantity')),
-        price: Q.Select(
-          ['product', 'data', 'price'],
-          Q.Var('productAndQuantity'),
-        ),
-      },
-    ),
+    {
+      productRef: Q.Select(
+        ['product', 'ref'],
+        Q.Var('productAndQuantity'),
+      ),
+      quantity: Q.Select(['quantity'], Q.Var('productAndQuantity')),
+      price: Q.Select(
+        ['product', 'data', 'price'],
+        Q.Var('productAndQuantity'),
+      ),
+    },
   )
 
   const CreateOrderFlow = Q.Let(

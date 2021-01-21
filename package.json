@@ -4,7 +4,8 @@
   "description": "",
   "main": "dist/index.js",
   "scripts": {
-    "start": "nodemon -w 'src/**/*.ts' -x \"ts-node\" src/index.ts",
+    "start": "nodemon -w 'src/**/*.ts' -x ts-node src",
+    "start:debug": "nodemon -w 'src/**/*.ts' -x node --inspect-brk -r ts-node/register src",
     "bootstrap": "ts-node ./src/db/bootstrap",
     "build": "tsc",
     "test": "echo \"Error: no test specified\" && exit 1"
