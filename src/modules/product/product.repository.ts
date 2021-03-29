@@ -28,8 +28,10 @@ export const createProduct = ({
     },
   })
 
-  return Db.clientForSecret(secret)
-    .query<V.Document<Product>>(CreateProduct)
+  return Db.client
+    .query<V.Document<Product>>(CreateProduct, {
+      secret,
+    })
     .then(mergeWithRef({ refFields: ['inCategoryRefs'] }))
 }
 

@@ -24,9 +24,9 @@ export const createOrder = async ({
   items,
   secret,
 }: Record<'items', OrderedItemInput[]> & WithSecret) => {
-  const userRef = await Db.clientForSecret(secret).query(
-    Q.CurrentIdentity(),
-  )
+  const userRef = await Db.client.query(Q.CurrentIdentity(), {
+    secret,
+  })
 
   const productRefAndQuantities = items.map(
     ({ productRef, quantity }) => ({
@@ -150,8 +150,10 @@ export const updateOrder = ({
     },
   )
 
-  return Db.clientForSecret(secret)
-    .query<V.Document<Order>>(UpdateOrderQuery)
+  return Db.client
+    .query<V.Document<Order>>(UpdateOrderQuery, {
+      secret,
+    })
     .then(mergeOrderWithRef)
 }
 
@@ -163,8 +165,10 @@ export const listUserOrders = ({ secret }: WithSecret) => {
     Q.Lambda(['_', 'ref'], Q.Get(Q.Var('ref'))),
   )
 
-  return Db.clientForSecret(secret)
-    .query<V.Page<V.Document<Order>>>(ListUserOrders)
+  return Db.client
+    .query<V.Page<V.Document<Order>>>(ListUserOrders, {
+      secret,
+    })
     .then(({ data }) => ({
       data: data.map(mergeOrderWithRef),
     }))
@@ -188,8 +192,10 @@ export const listOrderChanges = ({
       at: new Date(Math.round(ts / 1000)),
     }))
 
-  return Db.clientForSecret(secret)
-    .query<OrderChange[]>(ListOrderChanges)
+  return Db.client
+    .query<OrderChange[]>(ListOrderChanges, {
+      secret,
+    })
     .then(formatChanges)
     .catch(err =>
       Promise.reject(

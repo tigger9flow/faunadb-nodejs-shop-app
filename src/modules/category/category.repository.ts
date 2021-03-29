@@ -18,8 +18,10 @@ export const createCategory = ({
     },
   })
 
-  return Db.clientForSecret(secret)
-    .query<V.Document<Category>>(CreateCategory)
+  return Db.client
+    .query<V.Document<Category>>(CreateCategory, {
+      secret,
+    })
     .then(mergeWithRef())
 }
 
