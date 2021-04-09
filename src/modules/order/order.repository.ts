@@ -69,7 +69,7 @@ export const createOrder = async ({
         ),
       },
       Q.If(
-        Q.GT(Q.Var('updatedQuantity'), 0),
+        Q.GTE(Q.Var('updatedQuantity'), 0),
         Q.Update(Q.Var('productRef'), {
           data: {
             quantity: Q.Var('updatedQuantity'),
