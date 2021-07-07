@@ -85,9 +85,9 @@ const updateOrder: RouteOptions = {
   },
 }
 
-const listUserOrders: RouteOptions = {
+const listCustomerOrders: RouteOptions = {
   method: 'GET',
-  url: '/users/current/orders',
+  url: '/customers/current/orders',
   schema: {
     headers: authorizationSchema,
     security: schemaSecurity,
@@ -99,7 +99,7 @@ const listUserOrders: RouteOptions = {
       return Promise.reject(new HttpErrors.Unauthorized())
     }
 
-    return orderRepo.listUserOrders({
+    return orderRepo.listCustomerOrders({
       secret: authorization,
     })
   },
@@ -107,7 +107,7 @@ const listUserOrders: RouteOptions = {
 
 const listOrderChanges: RouteOptions = {
   method: 'GET',
-  url: '/users/current/orders/:orderRef/changes',
+  url: '/customers/current/orders/:orderRef/changes',
   schema: {
     headers: authorizationSchema,
     security: schemaSecurity,
@@ -132,6 +132,6 @@ const listOrderChanges: RouteOptions = {
 export const routes = [
   createOrder,
   updateOrder,
-  listUserOrders,
+  listCustomerOrders,
   listOrderChanges,
 ]

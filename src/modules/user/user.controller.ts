@@ -1,8 +1,8 @@
 import { RouteOptions } from 'fastify'
 import {
-  UserCredentials,
-  CustomerRegistrationPayload,
+  RegistrationPayload,
   UserType,
+  LoginPayload,
 } from './user.type'
 import * as userRepo from './user.repository'
 
@@ -27,25 +27,18 @@ const register: RouteOptions = {
         phone: phoneSchema,
         firstName: nonEmptyStringSchema,
         lastName: nonEmptyStringSchema,
-        address: nonEmptyStringSchema,
         password: {
           type: 'string',
           minLength: 8,
         },
       },
-      required: [
-        'phone',
-        'firstName',
-        'lastName',
-        'address',
-        'password',
-      ],
+      required: ['phone', 'firstName', 'lastName', 'password'],
     },
   },
   handler: ({ body }) =>
     userRepo
       .registerUser({
-        ...(body as Omit<CustomerRegistrationPayload, 'type'>),
+        ...(body as Omit<RegistrationPayload, 'type'>),
         type: UserType.CUSTOMER,
       })
       .then(({ secret }) => ({
@@ -62,16 +55,18 @@ const login: RouteOptions = {
       properties: {
         phone: phoneSchema,
         password: nonEmptyStringSchema,
+        type: {
+          type: 'string',
+          enum: Object.values(UserType),
+        },
       },
-      required: ['phone', 'password'],
+      required: ['phone', 'password', 'type'],
     },
   },
   handler: ({ body }) =>
-    userRepo
-      .loginUser(body as UserCredentials)
-      .then(({ secret }) => ({
-        authorization: secret,
-      })),
+    userRepo.loginUser(body as LoginPayload).then(({ secret }) => ({
+      authorization: secret,
+    })),
 }
 
 export const routes = [register, login]

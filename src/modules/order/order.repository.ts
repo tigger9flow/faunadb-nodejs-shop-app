@@ -18,13 +18,13 @@ export interface UpdateOrderInput extends WithSecret {
   payload: Pick<Order, 'status'>
 }
 
-const mergeOrderWithRef = mergeWithRef({ refFields: ['userRef'] })
+const mergeOrderWithRef = mergeWithRef({ refFields: ['customerRef'] })
 
 export const createOrder = async ({
   items,
   secret,
 }: Record<'items', OrderedItemInput[]> & WithSecret) => {
-  const userRef = await Db.client.query(Q.CurrentIdentity(), {
+  const customerRef = await Db.client.query(Q.CurrentIdentity(), {
     secret,
   })
 
@@ -109,7 +109,7 @@ export const createOrder = async ({
       ),
       Q.Create(Q.Collection(Db.ORDERS), {
         data: {
-          userRef,
+          customerRef,
           status: OrderStatus.ORDERED,
           items: Q.Map(
             Q.Var('productAndQuantities'),
@@ -157,16 +157,19 @@ export const updateOrder = ({
     .then(mergeOrderWithRef)
 }
 
-export const listUserOrders = ({ secret }: WithSecret) => {
-  const ListUserOrders = Q.Map(
+export const listCustomerOrders = ({ secret }: WithSecret) => {
+  const ListCustomerOrders = Q.Map(
     Q.Paginate(
-      Q.Match(Q.Index(Db.ORDERS_SEARCH_BY_USER), Q.CurrentIdentity()),
+      Q.Match(
+        Q.Index(Db.ORDERS_SEARCH_BY_CUSTOMER),
+        Q.CurrentIdentity(),
+      ),
     ),
     Q.Lambda(['_', 'ref'], Q.Get(Q.Var('ref'))),
   )
 
   return Db.client
-    .query<V.Page<V.Document<Order>>>(ListUserOrders, {
+    .query<V.Page<V.Document<Order>>>(ListCustomerOrders, {
       secret,
     })
     .then(({ data }) => ({

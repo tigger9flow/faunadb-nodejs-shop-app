@@ -1,41 +1,27 @@
 export enum UserType {
-  ADMIN = 'ADMIN',
+  MANAGER = 'MANAGER',
   CUSTOMER = 'CUSTOMER',
 }
 
-export interface UserEssential {
+export interface User {
   phone: string
-  type: UserType
+  firstName: string
+  lastName: string
   registeredAt: Date
 }
 
-export interface Customer extends UserEssential {
-  type: UserType.CUSTOMER
-  firstName: string
-  lastName: string
-  address: string
+export interface WithUserType {
+  type: UserType
 }
 
-export interface Admin extends UserEssential {
-  type: UserType.ADMIN
-}
-
-export type User = Customer | Admin
-
-export interface UserCredentials extends Pick<User, 'phone'> {
+export interface UserCredentials {
+  phone: string
   password: string
 }
 
-export interface AdminRegistrationPayload
-  extends UserCredentials,
-    Omit<UserEssential, 'type' | 'registeredAt'>,
-    Omit<Admin, 'registeredAt'> {}
+export interface LoginPayload extends UserCredentials, WithUserType {}
 
-export interface CustomerRegistrationPayload
+export interface RegistrationPayload
   extends UserCredentials,
-    Omit<UserEssential, 'type' | 'registeredAt'>,
-    Omit<Customer, 'registeredAt'> {}
-
-export type RegistrationPayload =
-  | AdminRegistrationPayload
-  | CustomerRegistrationPayload
+    Omit<User, 'registeredAt'>,
+    WithUserType {}

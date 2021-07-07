@@ -1,19 +1,42 @@
 import HttpErrors from 'http-errors'
 import { query as Q, errors as FaunaErrors } from 'faunadb'
 import * as Db from '../../db'
-import { RegistrationPayload, UserCredentials } from './user.type'
+import {
+  UserType,
+  RegistrationPayload,
+  LoginPayload,
+} from './user.type'
 
-const LoginQuery = ({ phone, password }: UserCredentials) =>
-  Q.Login(Q.Match(Q.Index(Db.USERS_SEARCH_BY_PHONE), phone), {
+const resolveCollectionByType = (type: UserType) => {
+  const collectionName = {
+    [UserType.CUSTOMER]: Db.CUSTOMERS,
+    [UserType.MANAGER]: Db.MANAGERS,
+  }[type]
+
+  return Q.Collection(collectionName)
+}
+
+const resolveIndexByType = (type: UserType) => {
+  const collectionName = {
+    [UserType.CUSTOMER]: Db.CUSTOMERS_SEARCH_BY_PHONE,
+    [UserType.MANAGER]: Db.MANAGERS_SEARCH_BY_PHONE,
+  }[type]
+
+  return Q.Index(collectionName)
+}
+
+const LoginQuery = ({ phone, password, type }: LoginPayload) =>
+  Q.Login(Q.Match(resolveIndexByType(type), phone), {
     password,
   })
 
 export const registerUser = ({
   password,
+  type,
   ...payload
 }: RegistrationPayload) => {
   const RegisterQuery = Q.Do(
-    Q.Create(Q.Collection(Db.USERS), {
+    Q.Create(resolveCollectionByType(type), {
       data: {
         ...payload,
         registeredAt: Q.Now(),
@@ -23,6 +46,7 @@ export const registerUser = ({
     LoginQuery({
       phone: payload.phone,
       password,
+      type,
     }),
   )
 
@@ -33,9 +57,9 @@ export const registerUser = ({
     }))
 }
 
-export const loginUser = (credentials: UserCredentials) =>
+export const loginUser = (payload: LoginPayload) =>
   Db.client
-    .query<Record<'secret', string>>(LoginQuery(credentials))
+    .query<Record<'secret', string>>(LoginQuery(payload))
     .then(({ secret }) => ({
       secret,
     }))

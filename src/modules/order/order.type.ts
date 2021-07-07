@@ -18,7 +18,7 @@ export interface OrderedItemInput extends Omit<OrderedItem, 'price'> {
 
 export interface Order {
   status: OrderStatus
-  userRef: RefOrString
+  customerRef: RefOrString
   items: OrderedItem[]
   // TODO: fix wrong typing as fauna returns not a plain Date object
   orderedAt: Date

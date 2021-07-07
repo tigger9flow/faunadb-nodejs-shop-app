@@ -9,22 +9,28 @@ import * as usersRepo from '../modules/user/user.repository'
 
 const {
   FAUNA_SECRET_ADMIN_KEY,
-  ADMIN_PHONE,
-  ADMIN_PASSWORD,
+  MANAGER_PHONE,
+  MANAGER_PASSWORD,
 } = process.env
 
 if (
-  ![FAUNA_SECRET_ADMIN_KEY, ADMIN_PHONE, ADMIN_PASSWORD].every(
+  ![FAUNA_SECRET_ADMIN_KEY, MANAGER_PHONE, MANAGER_PASSWORD].every(
     Boolean,
   )
 ) {
-  throw new Error('Missing env variables')
+  throw new Error('Missing some of env variables')
 }
 
 const CreateIfNotExists = (Resource: Expr, CreateDef: Expr) =>
   Q.If(Q.Exists(Resource), true, CreateDef)
 
-const collections = [Db.USERS, Db.PRODUCTS, Db.CATEGORIES, Db.ORDERS]
+const collections = [
+  Db.CUSTOMERS,
+  Db.MANAGERS,
+  Db.PRODUCTS,
+  Db.CATEGORIES,
+  Db.ORDERS,
+]
 
 const createdAtDescAndRef = [
   {
@@ -37,12 +43,22 @@ const createdAtDescAndRef = [
 ]
 
 const indexes: [Expr, Expr][] = [
-  // Users
+  // Customers
   [
-    Q.Index(Db.USERS_SEARCH_BY_PHONE),
+    Q.Index(Db.CUSTOMERS_SEARCH_BY_PHONE),
     Q.CreateIndex({
-      name: Db.USERS_SEARCH_BY_PHONE,
-      source: Q.Collection(Db.USERS),
+      name: Db.CUSTOMERS_SEARCH_BY_PHONE,
+      source: Q.Collection(Db.CUSTOMERS),
+      terms: [{ field: ['data', 'phone'] }],
+      unique: true,
+    }),
+  ],
+  // Managers
+  [
+    Q.Index(Db.MANAGERS_SEARCH_BY_PHONE),
+    Q.CreateIndex({
+      name: Db.MANAGERS_SEARCH_BY_PHONE,
+      source: Q.Collection(Db.MANAGERS),
       terms: [{ field: ['data', 'phone'] }],
       unique: true,
     }),
@@ -120,11 +136,11 @@ const indexes: [Expr, Expr][] = [
   ],
   // Orders
   [
-    Q.Index(Db.ORDERS_SEARCH_BY_USER),
+    Q.Index(Db.ORDERS_SEARCH_BY_CUSTOMER),
     Q.CreateIndex({
-      name: Db.ORDERS_SEARCH_BY_USER,
+      name: Db.ORDERS_SEARCH_BY_CUSTOMER,
       source: Q.Collection(Db.ORDERS),
-      terms: [{ field: ['data', 'userRef'] }],
+      terms: [{ field: ['data', 'customerRef'] }],
       values: [
         {
           field: ['data', 'orderedAt'],
@@ -151,38 +167,24 @@ const OwnedDocument = (ownerRefPath: string[]) =>
     ),
   )
 
-const MembershipFor = (userType: UserType) => ({
-  resource: Q.Collection(Db.USERS),
-  predicate: Q.Query(
-    Q.Lambda(
-      'userRef',
-      Q.Let(
-        {
-          userDoc: Q.Get(Q.Var('userRef')),
-          userType: Q.Select(['data', 'type'], Q.Var('userDoc')),
-        },
-        Q.Equals(userType, Q.Var('userType')),
-      ),
-    ),
-  ),
-})
-
 const roles: [Expr, Expr][] = [
   [
     Q.Role(Db.CUSTOMER_ROLE),
     Q.CreateRole({
       name: Db.CUSTOMER_ROLE,
-      membership: MembershipFor(UserType.CUSTOMER),
+      membership: {
+        resource: Q.Collection(Db.CUSTOMERS),
+      },
       privileges: [
         {
           resource: Q.Collection(Db.ORDERS),
           actions: {
-            read: OwnedDocument(['data', 'userRef']),
-            history_read: OwnedDocument(['data', 'userRef']),
+            read: OwnedDocument(['data', 'customerRef']),
+            history_read: OwnedDocument(['data', 'customerRef']),
           },
         },
         {
-          resource: Q.Index(Db.ORDERS_SEARCH_BY_USER),
+          resource: Q.Index(Db.ORDERS_SEARCH_BY_CUSTOMER),
           actions: {
             read: Q.Query(
               Q.Lambda(
@@ -199,10 +201,12 @@ const roles: [Expr, Expr][] = [
     }),
   ],
   [
-    Q.Role(Db.ADMIN_ROLE),
+    Q.Role(Db.MANAGER_ROLE),
     Q.CreateRole({
-      name: Db.ADMIN_ROLE,
-      membership: MembershipFor(UserType.ADMIN),
+      name: Db.MANAGER_ROLE,
+      membership: {
+        resource: Q.Collection(Db.MANAGERS),
+      },
       privileges: [
         {
           resource: Q.Collection(Db.PRODUCTS),
@@ -243,21 +247,23 @@ const bootstrap = async () => {
     await client.query(CreateIfNotExists(...pair))
   }
 
-  // Create admin user
-  const adminExists = await client.query(
+  // Create manager user
+  const managerExists = await client.query(
     Q.Exists(
-      Q.Match(Q.Index(Db.USERS_SEARCH_BY_PHONE), ADMIN_PHONE!),
+      Q.Match(Q.Index(Db.MANAGERS_SEARCH_BY_PHONE), MANAGER_PHONE!),
     ),
   )
 
-  if (!adminExists) {
+  if (!managerExists) {
     await usersRepo.registerUser({
-      type: UserType.ADMIN,
-      phone: ADMIN_PHONE!,
-      password: ADMIN_PASSWORD!,
+      type: UserType.MANAGER,
+      phone: MANAGER_PHONE!,
+      password: MANAGER_PASSWORD!,
+      firstName: 'General',
+      lastName: 'Manager',
     })
 
-    console.info(`Admin (${ADMIN_PHONE!}) user has been created`)
+    console.info(`Manager (${MANAGER_PHONE!}) user has been created`)
   }
 
   console.info('Done')

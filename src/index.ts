@@ -8,7 +8,7 @@ import { isProd } from './common'
 import { applyRoutes } from './routes'
 import { applyErrorHandler } from './common/errors'
 
-const PORT = process.env.PORT ?? '3000'
+const PORT = process.env.PORT ?? '4000'
 
 const main = async () => {
   const app = Fastify({
@@ -42,8 +42,6 @@ const main = async () => {
   applyErrorHandler(app)
 
   await app.listen(PORT)
-
-  console.info(`Up and running on :${PORT}`)
 }
 
-main()
+main().catch(console.error)
