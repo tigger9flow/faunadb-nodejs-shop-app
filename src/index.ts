@@ -3,6 +3,7 @@ import dotenv from 'dotenv'
 dotenv.config()
 
 import Fastify from 'fastify'
+import cors from 'fastify-cors'
 import Swagger from 'fastify-swagger'
 import { isProd } from './common'
 import { applyRoutes } from './routes'
@@ -20,7 +21,7 @@ const main = async () => {
     },
   })
 
-  app.register(Swagger, {
+  app.register(cors).register(Swagger, {
     routePrefix: '/docs',
     exposeRoute: true,
     swagger: {

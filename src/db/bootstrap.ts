@@ -2,7 +2,8 @@ import dotenv from 'dotenv'
 
 dotenv.config()
 
-import { Expr, query as Q } from 'faunadb'
+import { Client, Expr, query as Q } from 'faunadb'
+import faker from 'faker'
 import * as Db from '.'
 import { UserType } from '../modules/user/user.type'
 import * as usersRepo from '../modules/user/user.repository'
@@ -266,7 +267,77 @@ const bootstrap = async () => {
     console.info(`Manager (${MANAGER_PHONE!}) user has been created`)
   }
 
+  await seedData({ client })
+
+  console.info('Seeded data successfully')
   console.info('Done')
+}
+
+const seedData = async ({ client }: Record<'client', Client>) => {
+  const CATEGORIES_TO_CREATE = 6
+  const PRODUCTS_PER_CATEGORY = 12
+  const DAY_IN_MILLISECONDS = 1000 * 60 * 60 * 24
+  const dateMax = Date.now() - DAY_IN_MILLISECONDS
+  const dateMin = dateMax - DAY_IN_MILLISECONDS * 60
+
+  const makeTime = () =>
+    Q.Time(
+      faker.datatype
+        .datetime({
+          min: dateMin,
+          max: dateMax,
+        })
+        .toISOString(),
+    )
+
+  const makeCategoryData = () => ({
+    name: faker.commerce.department(),
+    createdAt: makeTime(),
+  })
+
+  const makeProductData = () => ({
+    name: faker.commerce.productName(),
+    price: Number(faker.commerce.price()),
+    quantity: faker.datatype.number({
+      min: 0,
+      max: 100,
+    }),
+    createdAt: makeTime(),
+  })
+
+  const makeCategory = () =>
+    Q.Let(
+      {
+        category: Q.Create(Q.Collection(Db.CATEGORIES), {
+          data: makeCategoryData(),
+        }),
+        categoryRef: Q.Select('ref', Q.Var('category')),
+      },
+      Q.Map(
+        Array.from(
+          { length: PRODUCTS_PER_CATEGORY },
+          makeProductData,
+        ),
+        Q.Lambda(
+          'productData',
+          Q.Create(Db.PRODUCTS, {
+            data: {
+              name: Q.Select('name', Q.Var('productData')),
+              price: Q.Select('price', Q.Var('productData')),
+              quantity: Q.Select('quantity', Q.Var('productData')),
+              inCategoryRefs: [Q.Var('categoryRef')],
+              createdAt: Q.Select('createdAt', Q.Var('productData')),
+            },
+          }),
+        ),
+      ),
+    )
+
+  await client.query(
+    Q.Do(
+      ...Array.from({ length: CATEGORIES_TO_CREATE }, makeCategory),
+    ),
+  )
 }
 
 bootstrap().catch(console.error)

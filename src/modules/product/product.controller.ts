@@ -71,16 +71,6 @@ const listQuerySchema = {
   },
 }
 
-const listProducts: RouteOptions = {
-  method: 'GET',
-  url: '/products',
-  schema: {
-    querystring: listQuerySchema,
-  },
-  handler: ({ query }) =>
-    productRepo.listProducts(query as ListQuery),
-}
-
 const listProductsByCategory: RouteOptions = {
   method: 'GET',
   url: '/categories/:categoryRef/products',
@@ -100,6 +90,5 @@ const listProductsByCategory: RouteOptions = {
 
 export const routes = [
   createProduct,
-  listProducts,
   listProductsByCategory,
 ]
